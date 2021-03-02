@@ -25,9 +25,10 @@ import (
 
 func main() {
 	var credentialsFile string
-	var project, location, ring string
+	var project, location, ring, name string
 	var protectionLevelName string
 	var ssh bool
+	flag.StringVar(&name, "name", "", "Name to use for Certificate Authority.")
 	flag.StringVar(&credentialsFile, "credentials-file", "", "Path to the `file` containing the Google's Cloud KMS credentials.")
 	flag.StringVar(&project, "project", "", "Google Cloud Project ID.")
 	flag.StringVar(&location, "location", "global", "Cloud KMS location name.")
@@ -38,6 +39,9 @@ func main() {
 	flag.Parse()
 
 	switch {
+	case name == "":
+		fmt.Fprintln(os.Stderr, "flag `--name` is required")
+		os.Exit(1)
 	case project == "":
 		usage()
 	case location == "":
@@ -70,7 +74,7 @@ func main() {
 		fatal(err)
 	}
 
-	if err := createPKI(c, project, location, ring, protectionLevel); err != nil {
+	if err := createPKI(c, name, project, location, ring, protectionLevel); err != nil {
 		fatal(err)
 	}
 
@@ -105,7 +109,7 @@ COPYRIGHT
 	os.Exit(1)
 }
 
-func createPKI(c *cloudkms.CloudKMS, project, location, keyRing string, protectionLevel apiv1.ProtectionLevel) error {
+func createPKI(c *cloudkms.CloudKMS, name, project, location, keyRing string, protectionLevel apiv1.ProtectionLevel) error {
 	ui.Println("Creating PKI ...")
 
 	parent := "projects/" + project + "/locations/" + location + "/keyRings/" + keyRing + "/cryptoKeys"
@@ -134,8 +138,8 @@ func createPKI(c *cloudkms.CloudKMS, project, location, keyRing string, protecti
 		BasicConstraintsValid: true,
 		MaxPathLen:            1,
 		MaxPathLenZero:        false,
-		Issuer:                pkix.Name{CommonName: "Smallstep Root"},
-		Subject:               pkix.Name{CommonName: "Smallstep Root"},
+		Issuer:                pkix.Name{CommonName: name + "Root"},
+		Subject:               pkix.Name{CommonName: name + "Root"},
 		SerialNumber:          mustSerialNumber(),
 		SubjectKeyId:          mustSubjectKeyID(resp.PublicKey),
 		AuthorityKeyId:        mustSubjectKeyID(resp.PublicKey),
@@ -180,7 +184,7 @@ func createPKI(c *cloudkms.CloudKMS, project, location, keyRing string, protecti
 		MaxPathLen:            0,
 		MaxPathLenZero:        true,
 		Issuer:                root.Subject,
-		Subject:               pkix.Name{CommonName: "Smallstep Intermediate"},
+		Subject:               pkix.Name{CommonName: name + "Intermediate"},
 		SerialNumber:          mustSerialNumber(),
 		SubjectKeyId:          mustSubjectKeyID(resp.PublicKey),
 	}
