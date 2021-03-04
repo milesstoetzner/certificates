@@ -28,6 +28,7 @@ func main() {
 	var project, location, ring, name string
 	var protectionLevelName string
 	var ssh bool
+	var years time.Duration
 	flag.StringVar(&name, "name", "", "Name to use for Certificate Authority.")
 	flag.StringVar(&credentialsFile, "credentials-file", "", "Path to the `file` containing the Google's Cloud KMS credentials.")
 	flag.StringVar(&project, "project", "", "Google Cloud Project ID.")
@@ -35,6 +36,7 @@ func main() {
 	flag.StringVar(&ring, "ring", "pki", "Cloud KMS ring name.")
 	flag.StringVar(&protectionLevelName, "protection-level", "SOFTWARE", "Protection level to use, SOFTWARE or HSM.")
 	flag.BoolVar(&ssh, "ssh", false, "Create SSH keys.")
+	flag.DurationVar(&years, "years", 10, "Expiry of Certificates in years.")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -74,7 +76,7 @@ func main() {
 		fatal(err)
 	}
 
-	if err := createPKI(c, name, project, location, ring, protectionLevel); err != nil {
+	if err := createPKI(c, name, project, location, ring, protectionLevel, years); err != nil {
 		fatal(err)
 	}
 
@@ -109,7 +111,7 @@ COPYRIGHT
 	os.Exit(1)
 }
 
-func createPKI(c *cloudkms.CloudKMS, name, project, location, keyRing string, protectionLevel apiv1.ProtectionLevel) error {
+func createPKI(c *cloudkms.CloudKMS, name, project, location, keyRing string, protectionLevel apiv1.ProtectionLevel, years time.Duration) error {
 	ui.Println("Creating PKI ...")
 
 	parent := "projects/" + project + "/locations/" + location + "/keyRings/" + keyRing + "/cryptoKeys"
@@ -133,13 +135,13 @@ func createPKI(c *cloudkms.CloudKMS, name, project, location, keyRing string, pr
 	root := &x509.Certificate{
 		IsCA:                  true,
 		NotBefore:             now,
-		NotAfter:              now.Add(time.Hour * 24 * 365 * 10),
+		NotAfter:              now.Add(time.Hour * 24 * 365 * years),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 		MaxPathLen:            1,
 		MaxPathLenZero:        false,
-		Issuer:                pkix.Name{CommonName: name + "Root"},
-		Subject:               pkix.Name{CommonName: name + "Root"},
+		Issuer:                pkix.Name{CommonName: name + " Root CA"},
+		Subject:               pkix.Name{CommonName: name + " Root CA"},
 		SerialNumber:          mustSerialNumber(),
 		SubjectKeyId:          mustSubjectKeyID(resp.PublicKey),
 		AuthorityKeyId:        mustSubjectKeyID(resp.PublicKey),
@@ -178,13 +180,13 @@ func createPKI(c *cloudkms.CloudKMS, name, project, location, keyRing string, pr
 	intermediate := &x509.Certificate{
 		IsCA:                  true,
 		NotBefore:             now,
-		NotAfter:              now.Add(time.Hour * 24 * 365 * 10),
+		NotAfter:              now.Add(time.Hour * 24 * 365 * years),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 		MaxPathLen:            0,
 		MaxPathLenZero:        true,
 		Issuer:                root.Subject,
-		Subject:               pkix.Name{CommonName: name + "Intermediate"},
+		Subject:               pkix.Name{CommonName: name + " Intermediate CA"},
 		SerialNumber:          mustSerialNumber(),
 		SubjectKeyId:          mustSubjectKeyID(resp.PublicKey),
 	}
